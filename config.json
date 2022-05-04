@@ -1,0 +1,14 @@
+{
+    "engine-settings": {
+        "memory": 2048,
+        "threads": 8,
+        "print-all": false,
+        "print-progress": true
+    },
+    "variation-config": {
+        "initial-moves": "e2e4 e7e5 g1f3 b8c6 b1c3",
+        "engine-depth": 32,
+        "variation-depth": 26,
+        "is-white": true
+    }
+}
