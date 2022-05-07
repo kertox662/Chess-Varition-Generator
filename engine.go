@@ -160,6 +160,20 @@ func (eng *Engine) SetFen(fen string) {
 	eng.write(fmt.Sprintf("position fen %s", fen))
 }
 
+var fenRE = regexp.MustCompile(`Fen: (.+) \d+ \d+`)
+
+func (eng *Engine) GetFen() string {
+	eng.write("d")
+	var fen string
+	eng.ReadUntilSubstring("Checkers:", func(s string) {
+		if m := fenRE.FindStringSubmatch(s); m != nil {
+			fen = m[1]
+		}
+	})
+
+	return fen
+}
+
 func (eng *Engine) StartSearch(depth int) {
 	eng.write(fmt.Sprintf("go depth %d", depth))
 }
@@ -231,16 +245,17 @@ func (eng *Engine) MakeVariations(inital Moves, varDepth, engineDepth int, isWhi
 		onlyBest = !onlyBest
 	}
 	res := make(map[string]bool)
-	err := eng.makeVariations(inital, varDepth, engineDepth, res, onlyBest)
+	cache := make(map[string]bool)
+	err := eng.makeVariations(inital, varDepth, engineDepth, res, cache, onlyBest)
 	if err != nil {
 		return res, fmt.Errorf("error making variations: %w", err)
 	}
 	return res, nil
 }
 
-const cpThreshold = -500
+const cpThreshold = -250
 
-func (eng *Engine) makeVariations(inital Moves, varDepth, engineDepth int, results map[string]bool, onlyBest bool) error {
+func (eng *Engine) makeVariations(inital Moves, varDepth, engineDepth int, results, posSet map[string]bool, onlyBest bool) error {
 	if varDepth == 0 {
 		results[inital.String()] = true
 		return nil
@@ -250,6 +265,14 @@ func (eng *Engine) makeVariations(inital Moves, varDepth, engineDepth int, resul
 		numLines = 1
 	}
 
+	eng.SetMoves(inital)
+	fen := eng.GetFen()
+	if posSet[fen] {
+		results[inital.String()] = true
+		return nil
+	}
+	posSet[fen] = true
+
 	bestMoves, err := eng.FindBestMove(inital, engineDepth, numLines)
 	if err != nil {
 		return err
@@ -257,9 +280,12 @@ func (eng *Engine) makeVariations(inital Moves, varDepth, engineDepth int, resul
 
 	if eng.printVarProgress {
 		eng.logger.Info("Best moves calculated:")
-		eng.logger.Info("INITIAL:" + inital.String())
+		eng.logger.Verbose("INITIAL:" + inital.String())
 		eng.logger.Info("BEST:" + bestMoves.String())
 		eng.logger.Info("Depth Left to go:" + strconv.Itoa(varDepth-1))
+		if len(results)%100 == 0 {
+			eng.logger.Info(fmt.Sprintf("Variations Calculated: %d", len(results)))
+		}
 	}
 
 	if len(bestMoves) == 0 {
@@ -269,14 +295,23 @@ func (eng *Engine) makeVariations(inital Moves, varDepth, engineDepth int, resul
 		for _, m := range bestMoves {
 			mv = m
 		}
-		return eng.makeVariations(append(inital, mv), varDepth-1, engineDepth, results, !onlyBest)
+		if mv.eval < cpThreshold {
+			return nil
+		}
+		return eng.makeVariations(append(inital, mv), varDepth-1, engineDepth, results, posSet, !onlyBest)
 	} else {
 		goodEval := false
 		for _, mv := range bestMoves {
 			if mv.eval > cpThreshold {
 				goodEval = true
-				if err := eng.makeVariations(append(inital, mv), varDepth-1, engineDepth, results, !onlyBest); err != nil {
+				if err := eng.makeVariations(append(inital, mv), varDepth-1, engineDepth, results, posSet, !onlyBest); err != nil {
 					return err
+				}
+			} else {
+				if !onlyBest {
+					if err := eng.makeVariations(append(inital, mv), 1, engineDepth, results, posSet, true); err != nil {
+						return err
+					}
 				}
 			}
 		}

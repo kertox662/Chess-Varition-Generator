@@ -23,8 +23,6 @@ type Config struct {
 }
 
 func main() {
-	eng := NewEngine("stockfish")
-
 	file, err := os.Open("config.json")
 	if err != nil {
 		log.Fatal("error opening config.json file:", err)
@@ -34,6 +32,8 @@ func main() {
 	if err != nil {
 		log.Fatal("error reading config.json:", err)
 	}
+
+	eng := NewEngine("stockfish")
 
 	engSet := cfg.EngineSettings
 	if engSet.Memory != nil {
@@ -47,6 +47,12 @@ func main() {
 	eng.Start()
 
 	mvs := MovesFromString(cfg.VariationConfig.InitialMoves)
+
+	fmt.Fprintln(os.Stderr, "Initial Starting Position:")
+	eng.SetMoves(mvs)
+	eng.write("d")
+	eng.ReadUntilSubstring("Checkers:", func(s string) { fmt.Fprint(os.Stderr, s) })
+
 	vars, err := eng.MakeVariations(
 		mvs,
 		cfg.VariationConfig.VariationDepth,
