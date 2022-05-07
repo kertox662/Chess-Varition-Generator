@@ -1,4 +1,6 @@
 {
+    "engine-path": "stockfish",
+    "output-path": "moves.txt",
     "engine-settings": {
         "memory": 2048,
         "threads": 8,

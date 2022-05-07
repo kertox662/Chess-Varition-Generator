@@ -20,10 +20,13 @@ type Config struct {
 		VariationDepth int    `json:"variation-depth"`
 		IsWhite        bool   `json:"is-white"`
 	} `json:"variation-config"`
+	EnginePath string `json:"engine-path"`
+	OutputPath string `json:"output-path"`
 }
 
 func main() {
 	file, err := os.Open("config.json")
+	defer file.Close()
 	if err != nil {
 		log.Fatal("error opening config.json file:", err)
 	}
@@ -33,7 +36,10 @@ func main() {
 		log.Fatal("error reading config.json:", err)
 	}
 
-	eng := NewEngine("stockfish")
+	if cfg.EnginePath == "" {
+		cfg.EnginePath = "stockfish"
+	}
+	eng := NewEngine(cfg.EnginePath)
 
 	engSet := cfg.EngineSettings
 	if engSet.Memory != nil {
@@ -62,8 +68,17 @@ func main() {
 
 	if err != nil {
 		log.Println("ERROR OCCURRED:", err)
+		return
 	}
+
+	ofile, err := os.Open(cfg.OutputPath)
+	if err != nil {
+		log.Println("ERROR OCCURRED OPENING FILE:", err)
+		return
+	}
+	defer ofile.Close()
+
 	for moves := range vars {
-		fmt.Println(moves)
+		fmt.Fprintln(ofile, moves)
 	}
 }
